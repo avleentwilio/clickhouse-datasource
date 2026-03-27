@@ -34,6 +34,8 @@ const filterOperators: Array<SelectableValue<FilterOperator>> = [
   { value: FilterOperator.NotIn, label: 'NOT IN' },
   { value: FilterOperator.IsNull, label: 'IS NULL' },
   { value: FilterOperator.IsNotNull, label: 'IS NOT NULL' },
+  { value: FilterOperator.HasAllTokens, label: 'hasAllTokens()' },
+  { value: FilterOperator.HasAnyTokens, label: 'hasAnyTokens()' },
 ];
 const standardTimeOptions: Array<SelectableValue<string>> = [
   { value: 'today()', label: 'TODAY' },
@@ -210,8 +212,16 @@ export const FilterEditor = (props: {
     mapKeyOptions.push({ label: filter.mapKey, value: filter.mapKey });
   }
 
+  const isFullTextOperator = filter.operator === FilterOperator.HasAllTokens || filter.operator === FilterOperator.HasAnyTokens;
+  const selectedColumn = fieldsList.find(f => f.name === filter.key);
+  const selectedColumnHasFullTextIndex = selectedColumn?.hasFullTextIndex || false;
+
   const getFields = () => {
-    const values = (filter.restrictToFields || fieldsList).map(f => {
+    // When a full-text operator is selected, only show columns with full-text indexes
+    const sourceFields = filter.restrictToFields || (isFullTextOperator
+      ? fieldsList.filter(f => f.hasFullTextIndex)
+      : fieldsList);
+    const values = sourceFields.map(f => {
       let label = f.label || f.name;
       if (f.type.startsWith('Map')) {
         label += '[]';
@@ -261,25 +271,28 @@ export const FilterEditor = (props: {
         ].includes(f.value!)
       );
     } else {
-      return filterOperators.filter((f) =>
-        [
-          FilterOperator.IsAnything,
-          FilterOperator.Like,
-          FilterOperator.NotLike,
-          FilterOperator.In,
-          FilterOperator.NotIn,
-          FilterOperator.IsNull,
-          FilterOperator.IsNotNull,
-          FilterOperator.Equals,
-          FilterOperator.NotEquals,
-          FilterOperator.IsEmpty,
-          FilterOperator.IsNotEmpty,
-          FilterOperator.LessThan,
-          FilterOperator.LessThanOrEqual,
-          FilterOperator.GreaterThan,
-          FilterOperator.GreaterThanOrEqual,
-        ].includes(f.value!)
-      );
+      const allowedOps = [
+        FilterOperator.IsAnything,
+        FilterOperator.Like,
+        FilterOperator.NotLike,
+        FilterOperator.In,
+        FilterOperator.NotIn,
+        FilterOperator.IsNull,
+        FilterOperator.IsNotNull,
+        FilterOperator.Equals,
+        FilterOperator.NotEquals,
+        FilterOperator.IsEmpty,
+        FilterOperator.IsNotEmpty,
+        FilterOperator.LessThan,
+        FilterOperator.LessThanOrEqual,
+        FilterOperator.GreaterThan,
+        FilterOperator.GreaterThanOrEqual,
+      ];
+      // Only show hasAllTokens/hasAnyTokens when the selected column has a full-text index
+      if (selectedColumnHasFullTextIndex || isFullTextOperator) {
+        allowedOps.push(FilterOperator.HasAllTokens, FilterOperator.HasAnyTokens);
+      }
+      return filterOperators.filter((f) => allowedOps.includes(f.value!));
     }
   };
   const onFilterNameChange = (fieldName: string) => {

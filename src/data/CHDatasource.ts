@@ -617,12 +617,35 @@ export class Datasource
   }
 
   /**
+   * Fetches column names that have a full-text index (TYPE full_text, inverted, or text).
+   */
+  async fetchFullTextIndexColumns(database: string | undefined, table: string): Promise<Set<string>> {
+    try {
+      const dbFilter = database ? `database = '${database}' AND ` : '';
+      const rawSql = `SELECT DISTINCT expr FROM system.data_skipping_indices WHERE ${dbFilter}table = '${table}' AND type IN ('full_text', 'inverted', 'text')`;
+      const frame = await this.runQuery({ rawSql });
+      if (frame.fields?.length === 0) {
+        return new Set();
+      }
+      return new Set(frame.fields[0].values.map((v: string) => v));
+    } catch (err) {
+      // system.data_skipping_indices may not be available on older ClickHouse versions
+      return new Set();
+    }
+  }
+
+  /**
    * Fetches column suggestions from the table schema.
    */
   async fetchColumnsFromTable(database: string | undefined, table: string): Promise<TableColumn[]> {
     const prefix = Boolean(database) ? `"${database}".` : '';
     const rawSql = `DESC TABLE ${prefix}"${table}"`;
-    const frame = await this.runQuery({ rawSql });
+
+    const [frame, fullTextColumns] = await Promise.all([
+      this.runQuery({ rawSql }),
+      this.fetchFullTextIndexColumns(database, table),
+    ]);
+
     if (frame.fields?.length === 0) {
       return [];
     }
@@ -632,6 +655,7 @@ export class Datasource
       type: item[1],
       label: item[0],
       picklistValues: [],
+      hasFullTextIndex: fullTextColumns.has(item[0]),
     }));
 
     const results = await Promise.all(

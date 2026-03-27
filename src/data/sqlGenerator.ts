@@ -745,67 +745,74 @@ const getFilters = (options: QueryBuilderOptions): string => {
       column += `.${escapedJSONPaths}`;
     }
 
-    filterParts.push(column);
-
-    let operator: string = filter.operator;
     let negate = false;
-    if (filter.operator === FilterOperator.IsEmpty || filter.operator === FilterOperator.IsNotEmpty) {
-      operator = '';
-    } else if (filter.operator === FilterOperator.NotLike) {
-      operator = 'LIKE';
-      negate = true;
-    } else if (filter.operator === FilterOperator.OutsideGrafanaTimeRange) {
-      operator = '';
-      negate = true;
-    } else if (filter.operator === FilterOperator.WithInGrafanaTimeRange) {
-      operator = '';
-    }
 
-    if (operator) {
-      filterParts.push(operator);
-    }
+    // Function-call style operators: hasAllTokens(column, 'value'), hasAnyTokens(column, 'value')
+    if (filter.operator === FilterOperator.HasAllTokens || filter.operator === FilterOperator.HasAnyTokens) {
+      const value = escapeValue((filter as StringFilter).value || '');
+      filterParts.push(`${filter.operator}(${column}, ${value})`);
+    } else {
+      filterParts.push(column);
 
-    if (isNullFilter(filter.operator)) {
-      // empty
-    } else if (filter.operator === FilterOperator.IsEmpty) {
-      filterParts.push(`= ''`);
-    } else if (filter.operator === FilterOperator.IsNotEmpty) {
-      filterParts.push(`!= ''`);
-    } else if (isBooleanFilter(type)) {
-      filterParts.push(String((filter as BooleanFilter).value));
-    } else if (isNumberFilter(type)) {
-      filterParts.push(String((filter as NumberFilter).value || '0'));
-    } else if (isDateFilter(type)) {
-      if (isDateFilterWithoutValue(type, filter.operator)) {
-        if (isDateType(type)) {
-          filterParts.push('>=', '\$__fromTime', 'AND', column, '<=', '\$__toTime');
-        }
-      } else {
-        switch ((filter as DateFilterWithValue).value) {
-          case 'GRAFANA_START_TIME':
-            if (isDateType(type)) {
-              filterParts.push('\$__fromTime');
-            }
-            break;
-          case 'GRAFANA_END_TIME':
-            if (isDateType(type)) {
-              filterParts.push('\$__toTime');
-            }
-            break;
-          default:
-            filterParts.push(escapeValue(String((filter as DateFilterWithValue).value || 'TODAY')));
-        }
+      let operator: string = filter.operator;
+      if (filter.operator === FilterOperator.IsEmpty || filter.operator === FilterOperator.IsNotEmpty) {
+        operator = '';
+      } else if (filter.operator === FilterOperator.NotLike) {
+        operator = 'LIKE';
+        negate = true;
+      } else if (filter.operator === FilterOperator.OutsideGrafanaTimeRange) {
+        operator = '';
+        negate = true;
+      } else if (filter.operator === FilterOperator.WithInGrafanaTimeRange) {
+        operator = '';
       }
-    } else if (isStringFilter(type, filter.operator)) {
-      if (filter.operator === FilterOperator.Like || filter.operator === FilterOperator.NotLike) {
-        filterParts.push(`'%${filter.value || ''}%'`);
+
+      if (operator) {
+        filterParts.push(operator);
+      }
+
+      if (isNullFilter(filter.operator)) {
+        // empty
+      } else if (filter.operator === FilterOperator.IsEmpty) {
+        filterParts.push(`= ''`);
+      } else if (filter.operator === FilterOperator.IsNotEmpty) {
+        filterParts.push(`!= ''`);
+      } else if (isBooleanFilter(type)) {
+        filterParts.push(String((filter as BooleanFilter).value));
+      } else if (isNumberFilter(type)) {
+        filterParts.push(String((filter as NumberFilter).value || '0'));
+      } else if (isDateFilter(type)) {
+        if (isDateFilterWithoutValue(type, filter.operator)) {
+          if (isDateType(type)) {
+            filterParts.push('>=', '\$__fromTime', 'AND', column, '<=', '\$__toTime');
+          }
+        } else {
+          switch ((filter as DateFilterWithValue).value) {
+            case 'GRAFANA_START_TIME':
+              if (isDateType(type)) {
+                filterParts.push('\$__fromTime');
+              }
+              break;
+            case 'GRAFANA_END_TIME':
+              if (isDateType(type)) {
+                filterParts.push('\$__toTime');
+              }
+              break;
+            default:
+              filterParts.push(escapeValue(String((filter as DateFilterWithValue).value || 'TODAY')));
+          }
+        }
+      } else if (isStringFilter(type, filter.operator)) {
+        if (filter.operator === FilterOperator.Like || filter.operator === FilterOperator.NotLike) {
+          filterParts.push(`'%${filter.value || ''}%'`);
+        } else {
+          filterParts.push(escapeValue((filter as StringFilter).value || ''));
+        }
+      } else if (isMultiFilter(type, filter.operator)) {
+        filterParts.push(`(${(filter as MultiFilter).value?.map(v => escapeValue(v.trim())).join(', ')})`);
       } else {
         filterParts.push(escapeValue((filter as StringFilter).value || ''));
       }
-    } else if (isMultiFilter(type, filter.operator)) {
-      filterParts.push(`(${(filter as MultiFilter).value?.map(v => escapeValue(v.trim())).join(', ')})`);
-    } else {
-      filterParts.push(escapeValue((filter as StringFilter).value || ''));
     }
 
     if (negate) {

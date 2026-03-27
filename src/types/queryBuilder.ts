@@ -118,6 +118,7 @@ export interface TableColumn {
   sortable?: boolean;
   groupable?: boolean;
   aggregatable?: boolean;
+  hasFullTextIndex?: boolean;
 }
 
 export interface SqlFunction {
@@ -229,6 +230,8 @@ export enum FilterOperator {
   NotIn = 'NOT IN',
   WithInGrafanaTimeRange = 'WITH IN DASHBOARD TIME RANGE',
   OutsideGrafanaTimeRange = 'OUTSIDE DASHBOARD TIME RANGE',
+  HasAllTokens = 'hasAllTokens',
+  HasAnyTokens = 'hasAnyTokens',
 }
 
 export interface CommonFilterProps {
@@ -282,7 +285,9 @@ export interface StringFilter extends CommonFilterProps {
     | FilterOperator.Equals
     | FilterOperator.NotEquals
     | FilterOperator.Like
-    | FilterOperator.NotLike;
+    | FilterOperator.NotLike
+    | FilterOperator.HasAllTokens
+    | FilterOperator.HasAnyTokens;
   value: string;
 }
 
